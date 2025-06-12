@@ -3,7 +3,6 @@ htmldate==1.6.0
 plotly==5.17.0
 seaborn==0.13.0
 stack-data==0.6.3
-statsmodels==0.14.0
 streamlit==1.45.1
 streamlit-aggrid==1.1.5.post1
 tornado==6.2
