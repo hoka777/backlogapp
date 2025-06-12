@@ -8,3 +8,4 @@ streamlit-aggrid==1.1.5.post1
 tornado==6.2
 urllib3==1.26.14
 watchdog==6.0.0
+openpyxl==3.1.0
