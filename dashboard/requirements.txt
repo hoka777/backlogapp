@@ -1,4 +1,4 @@
-html5lib==1.1More actions
+html5lib==1.1
 htmldate==1.6.0
 plotly==5.17.0
 seaborn==0.13.0
