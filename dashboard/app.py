@@ -232,7 +232,7 @@ with col2:
 with col3:
     swap_text =st.checkbox("Включить перенос слов",value=True)
     bar_mode = st.checkbox("Разделять бары")
-    sort_val_first = st.selectbox("Сортировать задачи по", ['Task','Start','Finish','Y_Group','Resource'])
+    sort_val_first = st.selectbox("Сортировать задачи по", ['Task','Start','Finish','Y_Group','Resource'],index=1)
     # sort_val_second = st.selectbox("Затем по", ['Task','Start','Finish','Y_Group','Resource'])
     asc_desc = st.selectbox("Направление", ['ASC','DESC'])
 
@@ -521,7 +521,7 @@ AgGrid(
     key="capacity_aggrid"
 )
 
-st.write(df_res.sort_values('Доступно (дн.)'))
+# st.write(df_res.sort_values('Доступно (дн.)'))
 
 #  Горизонтальная диаграмма «Нагрузка vs Отпуск vs Свободно»
 fig = px.bar(
