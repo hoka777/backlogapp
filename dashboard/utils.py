@@ -1,7 +1,30 @@
 import pandas as pd
 import textwrap
+import numpy as np
 
 
+
+def working_hours_between(start_date, end_date, hours_per_day: int = 8) -> int:
+    """
+    Возвращает количество рабочих часов между двумя датами включительно.
+    Учитываются только понедельник–пятница.
+    
+    Параметры:
+    - start_date, end_date: строка 'YYYY-MM-DD' или datetime-подобный объект.
+    - hours_per_day: число рабочих часов в одном дне (по умолчанию 8).
+    """
+    # Приводим к date
+    start = pd.to_datetime(start_date).date()
+    # Прибавляем 1 день к end_date, чтобы включить его в полуинтервал
+    end_inclusive = pd.to_datetime(end_date).date() + pd.Timedelta(days=1)
+    
+    # Считаем рабочие дни в [start, end_inclusive)
+    business_days = np.busday_count(
+        start,
+        end_inclusive,
+        weekmask='Mon Tue Wed Thu Fri'
+    )
+    return business_days * hours_per_day
 # 1. Функция для назначения треков внутри каждой группы
 def assign_tracks(df, group_col='Y_Group', start_col='Start', end_col='Finish'):
     df = df.sort_values([group_col, start_col]).reset_index(drop=True)
@@ -43,7 +66,7 @@ def transform_backlog_to_summary(backlog_df,df_sprint,column_name):
         """
         print(df_sprint)
         # Динамически определяем роли — все остальные колонки
-        roles = ['Аналитик',"UX/UI","C#", "Py","React", "QA"]
+        roles = ['Эксперт RnD','Аналитик','Архитектор',"UX/UI","C#", "Py","React", "QA"]
 
         # Список для хранения строк в формате "Сводной таблицы"
         summary_rows = []
