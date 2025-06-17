@@ -29,13 +29,24 @@ if not uploaded_file:
     st.sidebar.info("Загрузите файл для начала работы")
     st.stop()
 
+xls = pd.ExcelFile(uploaded_file)
+sheet_names = xls.sheet_names
+
+# Показываем выпадающий список в сайдбаре
+selected_sheet = st.sidebar.selectbox(
+    "Выберите лист для основного DataFrame",
+    options=sheet_names,
+    index=0,                 # по умолчанию первый лист
+    key="main_sheet"
+)
+
 ##############################################################################
 # --- Основные настройки --- 
 # Изначальная загрузка данных и инициализация в session_state
-st.session_state.df = load_data(uploaded_file, '2025 базовый сценарий ')
-st.session_state.df_people = load_data(uploaded_file, 'ШТАТ')
-st.session_state.df_sprint = load_data(uploaded_file, 'Спринты')
-st.session_state.df_leave = load_data(uploaded_file, 'Отпуска')
+st.session_state.df = load_data(uploaded_file, selected_sheet)
+st.session_state.df_people = load_data(uploaded_file, 'ШТАТ(дашборд)')
+st.session_state.df_sprint = load_data(uploaded_file, 'Спринты(дашборд)')
+st.session_state.df_leave = load_data(uploaded_file, 'Отпуска(дашборд)')
 
 df = st.session_state.df
 df_sprint = st.session_state.df_sprint
@@ -44,7 +55,7 @@ df_leave = st.session_state.df_leave
 
 
 # Кнопка для сброса изменений исходной таблицы
-df_original = load_data(uploaded_file,'2025 базовый сценарий ')#'Лист1')
+df_original = load_data(uploaded_file, selected_sheet)#'Лист1')
 # def reset_data():
 #     st.session_state.df = df_original.copy()
 # st.sidebar.button("Сбросить исходную таблицу", on_click=reset_data)
@@ -83,7 +94,7 @@ st.session_state.df = pd.DataFrame(grid_response['data'])
 df = st.session_state.df
 
 st.error("! Выберете колонку, где находятся названия задач!")
-column_task_name  = st.selectbox("Названия задач брать из колонки", df.columns.unique().to_list(), index=16)
+column_task_name  = st.selectbox("Названия задач брать из колонки", df.columns.unique().to_list(), index=8)
 
 ##############################################################################
 # --- Раздел 1.1: Калькулятор рабочих часов ---
@@ -532,7 +543,8 @@ fig = px.bar(
     title="Нагрузка vs Отпуск vs Свободное время",
     labels={'value':'Дней','variable':'Категория'}
 )
-fig.update_layout(barmode='stack')
+bar_px=30
+fig.update_layout(barmode='stack', height=len(df_res) * bar_px)
 st.plotly_chart(fig, use_container_width=True)
 
 # Стековая диаграмма объёма задач по ролям
