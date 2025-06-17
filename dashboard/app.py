@@ -301,7 +301,7 @@ def plot_gantt(gantt_d,bar_mode = True):
     fig.update_xaxes(
         showgrid=True,                  # включить основные gridlines
         gridwidth=1,                    
-        gridcolor="rgba(200,200,200,0.5)",
+        gridcolor="rgba(200,200,200,0)",
         tickformat="%d.%m",             # формат подписи дат
         tick0=first_monday.strftime("%Y-%m-%d"),
         dtick=7 * 24 * 60 * 60 * 1000,                     # основной шаг: 1 день
@@ -391,8 +391,8 @@ def plot_gantt(gantt_d,bar_mode = True):
     chart_html = fig.to_html(include_plotlyjs='cdn', full_html=False)
     components_html.html(
         f"""
-        <div style='width:100%; overflow-x:auto;background:transparent;'>
-        <div style='min-width:{width_plot}px;background:transparent;'>
+        <div style='width:100%; overflow-x:auto;background:rgba(200,200,200,0.7);'>
+        <div style='min-width:{width_plot}px;background:rgba(200,200,200,0.7);'>
             {chart_html}
         </div>
         </div>
