@@ -248,8 +248,8 @@ with col3:
     asc_desc = st.selectbox("Направление", ['ASC','DESC'])
 
     
-selected_module = st.multiselect("Модули", df_g['Процесс (модуль)'].unique(), default=df_g['Процесс (модуль)'].unique())
-df_g = df_g[df_g['Процесс (модуль)'].isin(selected_module)]
+# selected_module = st.multiselect("Модули", df_g['Процесс (модуль)'].unique(), default=df_g['Процесс (модуль)'].unique())
+# df_g = df_g[df_g['Процесс (модуль)'].isin(selected_module)]
 # подготовка данных
 gantt_df = df_g[[task_col, start_col, end_col, y_axis, color_by]].copy()
 gantt_df[start_col] = pd.to_datetime(gantt_df[start_col], errors='coerce')
@@ -319,12 +319,13 @@ def plot_gantt(gantt_d,bar_mode = True):
         categoryorder="array",
         categoryarray=y_cats,
         autorange="reversed",
+        color='black'
         )
     
 
     # Уменьшить зазор между дорожками (0 = вообще нет промежутка)
     fig.update_layout(
-        font=dict(color='white'),
+        font=dict(color='black'),
         # bargap=1,              # уменьшить пустое пространство между категориями
         # bargroupgap=1,           # убрать зазор между группами, если они есть
         height=height_plot ,              # при желании увеличить общую высоту графика
@@ -365,7 +366,7 @@ def plot_gantt(gantt_d,bar_mode = True):
                 yref="paper",
                 text=(f"Спринт {sprint_num}<br>{sprint_start.date():%d.%m.%Y}<br>{sprint_end.date():%d.%m.%Y}"),
                 showarrow=False,            
-                font=dict(size=font_size, color="White"),
+                font=dict(size=font_size, color="Black"),
                 align="center"      
             )
 
