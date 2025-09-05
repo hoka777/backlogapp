@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import io
+# import io
 import plotly.express as px
 from utils import transform_backlog_to_summary, \
         create_pivot,\
