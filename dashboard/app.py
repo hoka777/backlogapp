@@ -1,30 +1,23 @@
 import streamlit as st
-import pandas as pd
-# import io
-import plotly.express as px
-from utils import transform_backlog_to_summary, \
-        create_pivot,\
-            wrap_text,\
-                assign_tracks,\
-                    working_hours_between,\
-                    transform_gantt
-
-from openpyxl import load_workbook
-from openpyxl.utils.dataframe import dataframe_to_rows
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
-import streamlit.components.v1 as components_html
-import plotly.figure_factory as ff
-from pandas.tseries.offsets import BusinessDay
-import numpy as np
-from functools import partial
-AgGrid = partial(AgGrid, allow_unsafe_jscode=True)
 from st_aggrid.shared import JsCode
+
+import pandas as pd
+from pandas.tseries.offsets import BusinessDay
+from functools import partial
+import numpy as np
+import plotly.express as px
 from plot_graph import plot_gantt, ui_gantt_settings,ui_theme_picker
+from utils import transform_backlog_to_summary, \
+                create_pivot,\
+                wrap_text,\
+                assign_tracks,\
+                working_hours_between,\
+                transform_gantt
 
-import streamlit as st
 
 
-
+AgGrid = partial(AgGrid, allow_unsafe_jscode=True)
 ##############################################################################
 # ---  Настройка страницы --- 
 st.set_page_config(
@@ -74,7 +67,7 @@ df_original = load_data(uploaded_file, selected_sheet)#'Лист1')
 # st.sidebar.button("Сбросить исходную таблицу", on_click=reset_data)
 
 ##############################################################################
-# --- Раздел 1: Исходная таблица ---
+# Исходная таблица 
 st.subheader("Исходная таблица")
 st.info('! Здесь отображена исходная таблица с выбранного листа, отфильтруйте ее по нужным колонкам - далее в расчетах будет использоваться именно эта таблица. Вы также можете менять значения в таблице и сразу увидеть изменения (они не повлияют на ваш исходный файл)')
 # Настройка AgGrid
@@ -130,30 +123,6 @@ with st.expander("Режим работы", expanded=False):
         index=0,   # что выбрано по умолчанию
         horizontal=True # в одну строку
     )
-print('here')
-# st.write("Текущий режим:", mode)
-
-##############################################################################
-# --- Раздел 1.1: Калькулятор рабочих часов ---
-# column1, column2,column3 = st.columns(3)
-# with column1:
-#     start_date = st.date_input("Дата начала", value=pd.to_datetime("today").date())
-# with column3:
-#     end_date = st.date_input("Дата окончания", value=pd.to_datetime("today").date())
-#     if start_date > end_date:
-#         st.error("❗ Дата начала должна быть раньше или равна дате окончания.")
-#     else:
-#         with column1:
-#             hours_per_day = st.number_input("Рабочих часов в дне", min_value=1, max_value=24, value=8)
-#         total_hours = working_hours_between(start_date, end_date, hours_per_day)
-#         with column2:
-#             # st.write("### Статистика по кварталам")
-#             # st.write("В Q3 ", working_hours_between('2025-06-30', '2025-08-31', 8), 'рабочих часов')
-#             # st.write("В Q4 ", working_hours_between('2025-09-01', '2025-12-31', 8), 'рабочих часов')
-#             st.success(f"Между {start_date} и {end_date} включая оба дня:\n"
-#                         f"• рабочих дней: {total_hours // hours_per_day}\n"
-#                         f"• рабочих часов: {total_hours}")
-
 
 ##############################################################################
 # --- Раздел 2: Подготовка Gantt ---
@@ -167,9 +136,7 @@ df_g = pd.merge(
     df_sprint[['Номер спринта', 'Дата начала', 'Дата окончания']], on="Номер спринта",how="left")
 
 # 1) Переименуем колонки спринта, чтобы не путаться
-df_g.rename(columns={
-                'Дата начала': 'Дата начала спринта',
-                'Дата окончания': 'Дата окончания спринта'},inplace=True)
+df_g.rename(columns={'Дата начала': 'Дата начала спринта','Дата окончания': 'Дата окончания спринта'},inplace=True)
 
 df_g['Sprint_Start'] = df_g['Дата начала спринта']
 df_g['Sprint_End'] = df_g['Дата окончания спринта']
@@ -177,12 +144,10 @@ df_g['Sprint_End'] = df_g['Дата окончания спринта']
 # Приводим Sprint_Start в datetime и заполняем ТРЗ
 df_g['Sprint_Start'] = pd.to_datetime(df_g['Sprint_Start'])
 df_g["ТРЗ"] = (
-    pd.to_numeric(df_g["ТРЗ"], errors="coerce")   # всё, что нельзя в число -> NaN
+      pd.to_numeric(df_g["ТРЗ"], errors="coerce")   # всё, что нельзя в число -> NaN
       .fillna(1)                                  # заменяем NaN на 1
       .astype(int)                                # теперь можно в int
 )
-
-# df_g['ТРЗ'] = df_g['ТРЗ'].fillna(1).astype(int)
 
 # 1) Считаем предварительные начала/концы:
 #    - для Аналитик/UX/UI они стартуют сразу в Sprint_Start
@@ -243,10 +208,7 @@ gantt_df = df_g[[settings_gant1['task_col'], settings_gant1['start_col'], settin
 gantt_df[settings_gant1['start_col']] = pd.to_datetime(gantt_df[settings_gant1['start_col']], errors='coerce')
 gantt_df[settings_gant1['end_col']]   = pd.to_datetime(gantt_df[settings_gant1['end_col']], errors='coerce')
 gantt_df.columns = ["Task", "Start", "Finish", "Y_Group", "Resource"]
-# if settings_gant1['swap_text']:
-#     gantt_df['Task'] = gantt_df['Task'].apply(lambda s: wrap_text(s, max_len=settings_gant1['max_len']))
-#     gantt_df['Y_Group'] = gantt_df['Y_Group'].apply(lambda s: wrap_text(s, max_len=settings_gant1['max_len']))
-#     gantt_df['Resource'] = gantt_df['Resource'].apply(lambda s: wrap_text(s, max_len=settings_gant1['max_len']))
+
 if settings_gant1['asc_desc'] == "ASC":
     asc_desc=True
 else:
@@ -282,10 +244,9 @@ settings_gant2 = ui_gantt_settings(lane_df, prefix="plotly1",
                                    default_color_idx = 4)
 theme_key1, theme1, template_name1 = ui_theme_picker(expanded=False, default_key="pastel",suffix="1")
 with st.expander("График", expanded=True):
-    # st.write(settings_gant2)
     plot_gantt(lane_df,
-                start_column="Start",#settings_gant2["start_col"],
-                end_column="Finish",#settings_gant2["end_col"],
+                start_column="Start",
+                end_column="Finish",
                 y_group=settings_gant2['y_axis'],
                 color_column=settings_gant2["color_by"],
                 text_column=settings_gant2["task_col"],
@@ -362,44 +323,9 @@ df_f = df_f[(df_f['Дата начала'].dt.date >= period_start) &
             (df_f['Дата окончания'].dt.date <= period_end)]
         
 
-# # --- Раздел 5: Сводная по ресурсам --- скорей всего неправильно считаются дни
-# st.subheader("Сводная по ресурсам")
-# records = []
-# for person in df_f['Исполнитель'].unique():
-#     # всего раб. дней
-#     sprints = df_f[df_f['Исполнитель']==person]['Номер спринта'].unique()
-#     total_wd = 0
-#     for s in sprints:
-#         sp = df_sprint[df_sprint['Номер спринта']==s]
-#         a = pd.to_datetime(sp['Дата начала'].iloc[0]).date()
-#         b = pd.to_datetime(sp['Дата окончания'].iloc[0]).date()
-#         total_wd += np.busday_count(a, b + pd.Timedelta(days=1))
-#     occupied = df_f[df_f['Исполнитель']==person]['ТРЗ'].sum()
-#     # отпуск из df_leave
-#     vac = 0
-#     for _, r in df_leave[df_leave['Исполнитель']==person].iterrows():
-#         a = pd.to_datetime(r['Начало']).date()
-#         b = pd.to_datetime(r['Конец']).date()
-#         vac += np.busday_count(a, b + pd.Timedelta(days=1))
-#     records.append({
-#         'Исполнитель': person,
-#         'Роль': df_f[df_f['Исполнитель']==person]['Роль'].mode()[0],
-#         'Всего раб. дн.': total_wd,
-#         'Занято (ТРЗ дн.)': occupied,
-#         'Дн. отпуска': vac,
-#         'Доступно (дн.)': total_wd - occupied - vac
-#     })
 
-# df_res = pd.DataFrame(records)
-# gb_res = GridOptionsBuilder.from_dataframe(df_res)
-# gb_res.configure_default_column(resizable=True, sortable=True)
-# AgGrid(df_res, gridOptions=gb_res.build(), fit_columns_on_grid_load=True, height=300)
-
-
-
-# 5) Вычисление свободной ёмкости по периодам с учётом отпусков
+# Вычисление свободной ёмкости по периодам с учётом отпусков
 st.subheader("Свободная ёмкость исполнителей в период")
-
 records_cap = []
 for p in df_f['Исполнитель'].unique():
     # всего рабочих дней в выбранном периоде
@@ -419,6 +345,7 @@ for p in df_f['Исполнитель'].unique():
 
     records_cap.append({
         'Исполнитель': p,
+        'Роль': df_f[df_f['Исполнитель']==p]['Роль'].mode()[0],
         'Всего раб. дн.': total_bd,
         'Дн. отпуска': vac_days,
         'Занято (ТРЗ дн.)': task_bd,
@@ -553,3 +480,26 @@ if not df_conf.empty:
     AgGrid(df_conf, gridOptions=gb2.build(), height=300)
 else:
     st.success("Конфликтов не обнаружено")
+
+
+##############################################################################
+# Калькулятор рабочих часов ---
+with st.expander("Калькулятор рабочих часов", False):
+    column1, column2,column3 = st.columns(3)
+    with column1:
+        start_date = st.date_input("Дата начала", value=pd.to_datetime("today").date())
+    with column3:
+        end_date = st.date_input("Дата окончания", value=pd.to_datetime("today").date())
+        if start_date > end_date:
+            st.error("❗ Дата начала должна быть раньше или равна дате окончания.")
+        else:
+            with column1:
+                hours_per_day = st.number_input("Рабочих часов в дне", min_value=1, max_value=24, value=8)
+            total_hours = working_hours_between(start_date, end_date, hours_per_day)
+            with column2:
+                # st.write("### Статистика по кварталам")
+                # st.write("В Q3 ", working_hours_between('2025-06-30', '2025-08-31', 8), 'рабочих часов')
+                # st.write("В Q4 ", working_hours_between('2025-09-01', '2025-12-31', 8), 'рабочих часов')
+                st.success(f"Между {start_date} и {end_date} включая оба дня:\n"
+                            f"• рабочих дней: {total_hours // hours_per_day}\n"
+                            f"• рабочих часов: {total_hours}")
