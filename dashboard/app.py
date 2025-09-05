@@ -268,7 +268,7 @@ with st.expander("График", expanded=True):
                 max_len=settings_gant1['max_len'],
                 swap_text=settings_gant1['swap_text'],
                 theme=theme,
-                sprint_df=st.session_state.sprint_df,
+                sprint_df=st.session_state.df_sprint,
                 )
 
 ##########################################################
@@ -298,7 +298,7 @@ with st.expander("График", expanded=True):
                 max_len=settings_gant2['max_len'],
                 swap_text=settings_gant2['swap_text'],
                 theme=theme1,
-                sprint_df=st.session_state.sprint_df,
+                sprint_df=st.session_state.df_sprint,
                 )
 
 ############################################################
