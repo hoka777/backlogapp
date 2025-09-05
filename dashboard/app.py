@@ -2,7 +2,12 @@ import streamlit as st
 import pandas as pd
 import io
 import plotly.express as px
-from utils import transform_backlog_to_summary, create_pivot,wrap_text,assign_tracks,working_hours_between
+from utils import transform_backlog_to_summary, \
+        create_pivot,\
+            wrap_text,\
+                assign_tracks,\
+                    working_hours_between,\
+                    transform_gantt
 
 from openpyxl import load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
@@ -11,6 +16,14 @@ import streamlit.components.v1 as components_html
 import plotly.figure_factory as ff
 from pandas.tseries.offsets import BusinessDay
 import numpy as np
+from functools import partial
+AgGrid = partial(AgGrid, allow_unsafe_jscode=True)
+from st_aggrid.shared import JsCode
+from plot_graph import plot_gantt, ui_gantt_settings,ui_theme_picker
+
+import streamlit as st
+
+
 
 ##############################################################################
 # ---  Настройка страницы --- 
@@ -34,9 +47,9 @@ sheet_names = xls.sheet_names
 
 # Показываем выпадающий список в сайдбаре
 selected_sheet = st.sidebar.selectbox(
-    "Выберите лист для основного DataFrame",
+    "Выберите лист где находится бэклог",
     options=sheet_names,
-    index=0,                 # по умолчанию первый лист
+    index=6,                 # по умолчанию первый лист
     key="main_sheet"
 )
 
@@ -63,6 +76,7 @@ df_original = load_data(uploaded_file, selected_sheet)#'Лист1')
 ##############################################################################
 # --- Раздел 1: Исходная таблица ---
 st.subheader("Исходная таблица")
+st.info('! Здесь отображена исходная таблица с выбранного листа, отфильтруйте ее по нужным колонкам - далее в расчетах будет использоваться именно эта таблица. Вы также можете менять значения в таблице и сразу увидеть изменения (они не повлияют на ваш исходный файл)')
 # Настройка AgGrid
 grid_df = GridOptionsBuilder.from_dataframe(df)
 for col in df.columns:
@@ -81,59 +95,76 @@ grid_df.configure_grid_options(domLayout='normal')
 # gb.configure_column("Роль", flex=1)   # flex=1 — займет всё оставшееся пространство
 
 grid_options = grid_df.build()
+
 # Отображение AgGrid с enterprise фичами (для Set Filter)
 grid_response = AgGrid(
     df,
     gridOptions=grid_options,
     enable_enterprise_modules=True,
-    update_mode=GridUpdateMode.MODEL_CHANGED,
+    # update_mode=GridUpdateMode.MODEL_CHANGED,
+    update_mode=(
+        GridUpdateMode.MODEL_CHANGED            # редактирование ячеек
+        | GridUpdateMode.FILTERING_CHANGED      # фильтрация
+        | GridUpdateMode.SORTING_CHANGED        # сортировка
+    ),
     fit_columns_on_grid_load=False,
     height=500)
 # Обновление данных после редактирования
 st.session_state.df = pd.DataFrame(grid_response['data'])
 df = st.session_state.df
 
-st.error("! Выберете колонку, где находятся названия задач!")
-column_task_name  = st.selectbox("Названия задач брать из колонки", df.columns.unique().to_list(), index=8)
+with st.expander("Выбор исходных данных", expanded=False):
+    st.error("! Выберете названия колонок, где находятся названия эпиков и декомпозированных задач соответсвенно!")
+    col1, col2 = st.columns(2)
+    with col1:
+        column_epic_name  = st.selectbox("Эпики", df.columns.unique().to_list(), index=10)
+    with col2:
+        column_task_name  = st.selectbox("Задачи", df.columns.unique().to_list(), index=13)
+st.write('  ')
+st.write('  ')
+with st.expander("Режим работы", expanded=False):
+    st.error("! Выберете режим отображения эпиков или задач! В режиме эпиков будут отображаться названия эпиков, при этом ТРЗ будут суммировать по всем задачам входящих в Эпик. В режиме Задача есть возможность анализировать отдельно задачи, входящие в эпик")
+    mode = st.radio(
+        "Выберите режим:",
+        ["Эпики", "Задачи"],
+        index=0,   # что выбрано по умолчанию
+        horizontal=True # в одну строку
+    )
+print('here')
+# st.write("Текущий режим:", mode)
 
 ##############################################################################
 # --- Раздел 1.1: Калькулятор рабочих часов ---
-column1, column2,column3 = st.columns(3)
-with column1:
-    start_date = st.date_input("Дата начала", value=pd.to_datetime("today").date())
-with column3:
-    end_date = st.date_input("Дата окончания", value=pd.to_datetime("today").date())
-    if start_date > end_date:
-        st.error("❗ Дата начала должна быть раньше или равна дате окончания.")
-    else:
-        with column1:
-            hours_per_day = st.number_input("Рабочих часов в дне", min_value=1, max_value=24, value=8)
-        total_hours = working_hours_between(start_date, end_date, hours_per_day)
-        with column2:
-            # st.write("### Статистика по кварталам")
-            # st.write("В Q3 ", working_hours_between('2025-06-30', '2025-08-31', 8), 'рабочих часов')
-            # st.write("В Q4 ", working_hours_between('2025-09-01', '2025-12-31', 8), 'рабочих часов')
-            st.success(f"Между {start_date} и {end_date} включая оба дня:\n"
-                        f"• рабочих дней: {total_hours // hours_per_day}\n"
-                        f"• рабочих часов: {total_hours}")
+# column1, column2,column3 = st.columns(3)
+# with column1:
+#     start_date = st.date_input("Дата начала", value=pd.to_datetime("today").date())
+# with column3:
+#     end_date = st.date_input("Дата окончания", value=pd.to_datetime("today").date())
+#     if start_date > end_date:
+#         st.error("❗ Дата начала должна быть раньше или равна дате окончания.")
+#     else:
+#         with column1:
+#             hours_per_day = st.number_input("Рабочих часов в дне", min_value=1, max_value=24, value=8)
+#         total_hours = working_hours_between(start_date, end_date, hours_per_day)
+#         with column2:
+#             # st.write("### Статистика по кварталам")
+#             # st.write("В Q3 ", working_hours_between('2025-06-30', '2025-08-31', 8), 'рабочих часов')
+#             # st.write("В Q4 ", working_hours_between('2025-09-01', '2025-12-31', 8), 'рабочих часов')
+#             st.success(f"Между {start_date} и {end_date} включая оба дня:\n"
+#                         f"• рабочих дней: {total_hours // hours_per_day}\n"
+#                         f"• рабочих часов: {total_hours}")
 
 
 ##############################################################################
 # --- Раздел 2: Подготовка Gantt ---
 # st.subheader("Таблица для Ганта")
-st.session_state.df_gantt = transform_backlog_to_summary(df,df_sprint,column_task_name)
+st.session_state.df_gantt = transform_backlog_to_summary(df,df_sprint,column_epic_name,column_task_name,mode)
 df_g = st.session_state.df_gantt
 # st.write(df_g)
+
 df_g = pd.merge(
     st.session_state.df_gantt,
     df_sprint[['Номер спринта', 'Дата начала', 'Дата окончания']], on="Номер спринта",how="left")
-# # Конвертируем в формат date (без времени)
-# df_g['ТРЗ'] = df_g['ТРЗ'].fillna(0).astype(int)
-# df_g['Дата начала']   = pd.to_datetime(df_g['Дата начала'])#.dt.strftime('%Y-%m-%d')
-# df_g["Дата окончания"] = df_g.apply(lambda row: row["Дата начала"] + BusinessDay(row["ТРЗ"]),axis=1)
-
-# df_g['Дата начала']   = pd.to_datetime(df_g['Дата начала']).dt.strftime('%Y-%m-%d')                                                 
-# df_g['Дата окончания'] = pd.to_datetime(df_g['Дата окончания']).dt.strftime('%Y-%m-%d')
 
 # 1) Переименуем колонки спринта, чтобы не путаться
 df_g.rename(columns={
@@ -145,7 +176,13 @@ df_g['Sprint_End'] = df_g['Дата окончания спринта']
 
 # Приводим Sprint_Start в datetime и заполняем ТРЗ
 df_g['Sprint_Start'] = pd.to_datetime(df_g['Sprint_Start'])
-df_g['ТРЗ'] = df_g['ТРЗ'].fillna(1).astype(int)
+df_g["ТРЗ"] = (
+    pd.to_numeric(df_g["ТРЗ"], errors="coerce")   # всё, что нельзя в число -> NaN
+      .fillna(1)                                  # заменяем NaN на 1
+      .astype(int)                                # теперь можно в int
+)
+
+# df_g['ТРЗ'] = df_g['ТРЗ'].fillna(1).astype(int)
 
 # 1) Считаем предварительные начала/концы:
 #    - для Аналитик/UX/UI они стартуют сразу в Sprint_Start
@@ -154,7 +191,7 @@ df_g['Start_calc'] = df_g['Sprint_Start']
 df_g['Finish_calc'] = df_g['Start_calc'] + df_g['ТРЗ'].apply(BusinessDay)
 
 # 2) Определяем момент, когда заканчиваются Аналитик+UX/UI (AD_finish):
-task_keys = ['Процесс (модуль)','Направление','Название крупная задача (ЭПИК)','Номер спринта']
+task_keys = ['Feature (модуль)','Направление','Название крупная задача (ЭПИК)','Номер спринта']
 mask_ad = df_g['Роль'].isin(['Эксперт RnD','Аналитик','Архитектор'])
 ad_finish = (df_g[mask_ad]
              .groupby(task_keys)['Finish_calc']
@@ -194,249 +231,115 @@ df_g.loc[mask_qa, 'Finish_calc'] = (
 df_g['Дата начала']   = df_g['Start_calc']#.dt.strftime('%Y-%m-%d')
 df_g['Дата окончания'] = df_g['Finish_calc']#.dt.strftime('%Y-%m-%d')
 
-# Настройка AgGrid для df_g
-# grid_gantt = GridOptionsBuilder.from_dataframe(df_g)
-# for col in df_g.columns:
-#     grid_gantt.configure_column(
-#         field=col,
-#         editable=True,
-#         filter="agSetColumnFilter",
-#         filterParams={'applyButton': True, 'clearButton': True},
-#         sortable=True,
-#         resizable=True)
-# grid_gantt.configure_grid_options(domLayout='normal')
-# grid_options = grid_gantt.build()
-# grid_response1 = AgGrid(
-#     df_g,
-#     gridOptions=grid_options,
-#     enable_enterprise_modules=True,
-#     update_mode=GridUpdateMode.MODEL_CHANGED, 
-#     fit_columns_on_grid_load=True           # подгонка колонок
-# )
-
-# # сохраняем обратно в session_state
-# st.session_state.df_gantt = pd.DataFrame(grid_response1['data'])
-# df_g = st.session_state.df_gantt
-# st.data_editor(df_g, use_container_width=False)
 
 
-##############################################################################
+#############################################################################
 # --- Настройка и отображение Gantt-диаграммы --- 
-st.subheader("Настройка Gantt-диаграммы и графика")
-col1, col2,col3 = st.columns([1, 1,1])  # или st.columns(2)
-with col1:
-    st.write("Фильтры")
-    cols = df_g.columns.tolist()
-    # выбор колонок
-    task_col  = st.selectbox("Подпись в тултипе", cols, index=3)
-    y_axis   = st.selectbox("Группировать по (ось Y)", cols, index=2)
-    color_by = st.selectbox("Окрашивать по", cols, index=0)
-
-    start_col = "Дата начала" #st.selectbox("Столбец с датой начала", cols, index=1)
-    end_col   = "Дата окончания" #st.selectbox("Столбец с датой окончания", cols, index=2)
-
-with col2:
-    max_len = st.slider("Длина подписей", min_value=10, max_value=100, value=80)
-    font_size = st.slider("Размер текста", min_value=1, max_value=50, value=8)
-    width_plot = st.slider("Ширина диаграммы", min_value=500, max_value=2000, value=1700)
-    height_plot = st.slider("Высота диаграммы", min_value=500, max_value=2500, value=1200)
-with col3:
-    swap_text =st.checkbox("Включить перенос слов",value=True)
-    bar_mode = st.checkbox("Разделять бары")
-    sort_val_first = st.selectbox("Сортировать задачи по", ['Task','Start','Finish','Y_Group','Resource'],index=1)
-    # sort_val_second = st.selectbox("Затем по", ['Task','Start','Finish','Y_Group','Resource'])
-    asc_desc = st.selectbox("Направление", ['ASC','DESC'])
-
-    
-# selected_module = st.multiselect("Модули", df_g['Процесс (модуль)'].unique(), default=df_g['Процесс (модуль)'].unique())
-# df_g = df_g[df_g['Процесс (модуль)'].isin(selected_module)]
+st.subheader("Gantt-диаграмма поэтапная")
+st.info("Данная диаграмма учитывает последовательность разработки - сначала Аналитик/UX/UI/Архитектор (по макс времени), потом роли разработки (также по макс) и затем QA.")
+settings_gant1 = ui_gantt_settings(df_g, prefix="plotly", title="⚙️ Настройки",default_y_idx=0,default_task_idx=1,default_color_idx=2)
 # подготовка данных
-gantt_df = df_g[[task_col, start_col, end_col, y_axis, color_by]].copy()
-gantt_df[start_col] = pd.to_datetime(gantt_df[start_col], errors='coerce')
-gantt_df[end_col]   = pd.to_datetime(gantt_df[end_col], errors='coerce')
+gantt_df = df_g[[settings_gant1['task_col'], settings_gant1['start_col'], settings_gant1['end_col'], settings_gant1['y_axis'], settings_gant1['color_by']]].copy()
+gantt_df[settings_gant1['start_col']] = pd.to_datetime(gantt_df[settings_gant1['start_col']], errors='coerce')
+gantt_df[settings_gant1['end_col']]   = pd.to_datetime(gantt_df[settings_gant1['end_col']], errors='coerce')
 gantt_df.columns = ["Task", "Start", "Finish", "Y_Group", "Resource"]
-
-
-if swap_text:
-    gantt_df['Task'] = gantt_df['Task'].apply(lambda s: wrap_text(s, max_len=max_len))
-    gantt_df['Y_Group'] = gantt_df['Y_Group'].apply(lambda s: wrap_text(s, max_len=max_len))
-    gantt_df['Resource'] = gantt_df['Resource'].apply(lambda s: wrap_text(s, max_len=max_len))
-
-##############################################################################
-# st.write(gantt_df)
-# --- Раздел 3: Gantt-диаграмма ---
-
-
-def plot_gantt(gantt_d,bar_mode = True):
-    y_group = "Y_Group"
-    gantt_df = gantt_d
-    if bar_mode:
-        gantt_df = assign_tracks(gantt_df)
-        # 3. Делаем новую категорию, объединяя имя группы и номер трека
-        gantt_df['Y_Group_lane'] = gantt_df['Y_Group'] + ' (lane ' + (gantt_df['track']+1).astype(str) + ')'
-        gantt_df['number_lane'] = (gantt_df['track']+1).astype(str)
-        gantt_df.sort_values(['Y_Group','number_lane'], ascending=False,inplace=True)
-        y_group="Y_Group_lane"
-    
-    # отображение Plotly Gantt
-    fig = px.timeline(
-        gantt_df,
-        x_start="Start",x_end="Finish",
-        y=y_group, color="Resource",
-        title="График занятости", text="Task",
-        opacity=0.6, template='plotly',
-        )
-    fig.update_traces(
-        textposition="inside",
-        insidetextanchor="end",
-        textangle=0,
-        textfont=dict(size=25),
-        width=0.9,               # чем больше тем толще
-        offsetgroup=0,
-    )
-    
-    x_min = pd.to_datetime(df_g['Дата начала']).min()
-    # смещаем назад на number_of_days = weekday, чтобы попасть на понедельник той же недели
-    first_monday = x_min - pd.to_timedelta(x_min.weekday(), unit="d")
-    fig.update_xaxes(
-        showgrid=True,                  # включить основные gridlines
-        gridwidth=1,                    
-        gridcolor="rgba(200,200,200,0)",
-        tickformat="%d.%m",             # формат подписи дат
-        tick0=first_monday.strftime("%Y-%m-%d"),
-        dtick=7 * 24 * 60 * 60 * 1000,                     # основной шаг: 1 день
-        # minor=dict(
-        #     showgrid=False,              # включить минорные gridlines
-        #     gridwidth=1,
-        #     gridcolor="rgba(200,200,200,0.25)",
-        #     dtick="12h"                 # шаг минорной сетки: 12 часов
-        # )
-    )
-    y_cats = gantt_df[y_group].unique().tolist()
-    fig.update_yaxes(
-        automargin=True,
-        tickfont=dict(size=font_size),
-        categoryorder="array",
-        categoryarray=y_cats,
-        autorange="reversed",
-        color='black'
-        )
-    
-
-    # Уменьшить зазор между дорожками (0 = вообще нет промежутка)
-    fig.update_layout(
-        font=dict(color='black'),
-        # bargap=1,              # уменьшить пустое пространство между категориями
-        # bargroupgap=1,           # убрать зазор между группами, если они есть
-        height=height_plot ,              # при желании увеличить общую высоту графика
-        barmode="overlay",  # установить группировку по Y
-        paper_bgcolor='rgba(0,0,0,0)',  # фон всего холста
-        plot_bgcolor='rgba(0,0,0,0)',   # фон области графика
-        # legend=dict(
-        #     orientation="v",     # вертикальное (по умолчанию)
-        #     yanchor="top",
-        #     y=0.95,              # чуть ниже верхней границы
-        #     xanchor="right",
-        #     x=0.95)
-    )
-
-
-
-    # Фоновые полосы спринтов
-    for _, sprint in st.session_state.df_sprint.iterrows():
-        sprint_start = pd.to_datetime(sprint['Дата начала'], errors='coerce')
-        sprint_end = pd.to_datetime(sprint['Дата окончания'], errors='coerce')
-        sprint_num = sprint['Номер спринта']
-        if pd.notnull(sprint_start) and pd.notnull(sprint_end):
-            fig.add_vrect(
-                x0=sprint_start,
-                x1=sprint_end,
-                fillcolor="LightSalmon",
-                opacity=0.3,
-                layer="below",
-                line_width=0,
-                
-            )
-            # единая аннотация с переносом строки: номер спринта и даты
-            mid = sprint_start + (sprint_end - sprint_start) / 2
-            fig.add_annotation(
-                x=mid,
-                y=1.04,
-                xref="x",
-                yref="paper",
-                text=(f"Спринт {sprint_num}<br>{sprint_start.date():%d.%m.%Y}<br>{sprint_end.date():%d.%m.%Y}"),
-                showarrow=False,            
-                font=dict(size=font_size, color="Black"),
-                align="center"      
-            )
-
-    # Автоматическое горизонтальное выделение каждой категории Y
-    # Вычисляем диапазон X по данным Gantt
-    x_min = gantt_df['Start'].min()
-    x_max = gantt_df['Finish'].max()
-    for idx, cat in enumerate(y_cats):
-        # отступ вверх и вниз по оси Y для полосы
-        y0 = idx - 0.4
-        y1 = idx + 0.4
-        fig.add_shape(
-            type="rect",
-            x0=x_min, x1=x_max,
-            y0=y0, y1=y1,
-            xref="x", yref="y",
-            fillcolor="LightBlue" if idx % 2 == 0 else "LightGray",
-            opacity=0.1,
-            layer="below",
-            line_width=0
-        )
-    # Для горизонтального скролла и фиксированной ширины вставляем через raw HTML
-    chart_html = fig.to_html(include_plotlyjs='cdn', full_html=False)
-    components_html.html(
-        f"""
-        <div style='width:100%; overflow-x:auto;background:rgba(200,200,200,0.7);'>
-        <div style='min-width:{width_plot}px;background:rgba(200,200,200,0.7);'>
-            {chart_html}
-        </div>
-        </div>
-        """,
-        height=height_plot
-    )
-
-if asc_desc == "ASC":
+# if settings_gant1['swap_text']:
+#     gantt_df['Task'] = gantt_df['Task'].apply(lambda s: wrap_text(s, max_len=settings_gant1['max_len']))
+#     gantt_df['Y_Group'] = gantt_df['Y_Group'].apply(lambda s: wrap_text(s, max_len=settings_gant1['max_len']))
+#     gantt_df['Resource'] = gantt_df['Resource'].apply(lambda s: wrap_text(s, max_len=settings_gant1['max_len']))
+if settings_gant1['asc_desc'] == "ASC":
     asc_desc=True
 else:
-    asc_desc=False
-plot_gantt(gantt_df.sort_values(by=[sort_val_first],ascending=asc_desc),bar_mode)
+    asc_desc=False  
+theme_key, theme, template_name = ui_theme_picker(expanded=False, default_key="pastel",)
+with st.expander("График", expanded=True):
+    plot_gantt(gantt_df.sort_values(by=[settings_gant1['sort_val_first']],ascending=asc_desc),
+                #    start_column="Start",#settings_gant2["start_col"],
+                #    end_column="Finish",#settings_gant2["end_col"],
+                #    y_group=settings_gant1['y_axis'],
+                #    color_column=settings_gant1["color_by"],
+                #    text_column=settings_gant1["task_col"],
+                graph_title="График занятости",
+                font_size=settings_gant1["font_size"],
+                width_plot=settings_gant1["width_plot"],
+                height_plot =settings_gant1["height_plot"],
+                fit_names=settings_gant1['fit_names'],
+                font_size_names=settings_gant1['font_size_names'],
+                max_len=settings_gant1['max_len'],
+                swap_text=settings_gant1['swap_text'],
+                theme=theme,
+                )
+
+##########################################################
+st.subheader("Gantt-диаграмма компактная")
+st.write("Данный график не учитывает последовательность разработки - по эпику суммируется ТРЗ по всем ролям.")
+lane_df = transform_gantt(gantt_df)
+settings_gant2 = ui_gantt_settings(lane_df, prefix="plotly1", 
+                                   title="⚙️ Настройки",
+                                   default_y_idx = 5, 
+                                   default_task_idx = 0,
+                                   default_color_idx = 4)
+theme_key1, theme1, template_name1 = ui_theme_picker(expanded=False, default_key="pastel",suffix="1")
+with st.expander("График", expanded=True):
+    # st.write(settings_gant2)
+    plot_gantt(lane_df,
+                start_column="Start",#settings_gant2["start_col"],
+                end_column="Finish",#settings_gant2["end_col"],
+                y_group=settings_gant2['y_axis'],
+                color_column=settings_gant2["color_by"],
+                text_column=settings_gant2["task_col"],
+                graph_title="График занятости",
+                font_size=settings_gant2["font_size"],
+                width_plot=settings_gant2["width_plot"],
+                height_plot =settings_gant2["height_plot"],
+                fit_names=settings_gant2['fit_names'],
+                font_size_names=settings_gant2['font_size_names'],
+                max_len=settings_gant2['max_len'],
+                swap_text=settings_gant2['swap_text'],
+                theme=theme1,
+                )
+
+############################################################
+# ===== Сводная таблица ТРЗ по стекам и общая =====
+roles = ['Эксперт RnD','Аналитик','Архитектор','UX/UI','C#','Py','React','QA']
+trz_cols = [f"трз {r}" for r in roles if f"трз {r}" in df.columns]
+if trz_cols:
+    trz_sum = df[trz_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum()
+    total_trz = trz_sum.sum()
+    summary_df = pd.DataFrame([trz_sum])
+    summary_df.index = ["Сумма ТРЗ по всем задачам"]
+    summary_df["Итого"] = total_trz
+    st.subheader("Сумма ТРЗ по всем задачам (по стекам и общая)")
+    st.dataframe(summary_df)
 
 
-# # Раздел 3: Сводная таблица
-# st.subheader("Настройка и просмотр сводной таблицы")
-# all_cols = df.columns.tolist()
-# index_cols   = st.multiselect("Выберите индексные столбцы", all_cols)
-# columns_cols = st.multiselect("Выберите столбцы для колонок", all_cols)
-# value_col    = st.selectbox("Выберите столбец для значений", all_cols)
-# aggfunc      = st.selectbox("Функция агрегации", ["sum", "mean", "count", "min", "max"], index=0)
-# if index_cols and value_col:
-#     pivot = create_pivot(df, index_cols, columns_cols, value_col, aggfunc)
-#     if pivot is not None:
-#         st.dataframe(pivot, use_container_width=True)
-# else:
-#     st.info("Выберите хотя бы индексные столбцы и столбец значений.")
-
-
-
-
-
-# # --- Раздел 4: Фильтры для анализа нагрузки ---
-# st.subheader("Фильтры для анализа нагрузки")
-# selected_people = st.multiselect("Исполнители", df_g['Исполнитель'].unique(), default=df_g['Исполнитель'].unique())
-# selected_roles  = st.multiselect("Роли", df_g['Роль'].unique(), default=df_g['Роль'].unique())
-# selected_sprints= st.multiselect("Спринты", df_g['Номер спринта'].unique(), default=df_g['Номер спринта'].dropna().unique())
-
-# df_f = df_g[
-#     df_g['Исполнитель'].isin(selected_people) &
-#     df_g['Роль'].isin(selected_roles) &
-#     df_g['Номер спринта'].isin(selected_sprints)
-# ].copy()
+# -------- Свод по задачам (Эпик/column_task_name): сумма ТРЗ по стекам и Итого --------
+try:
+    _roles = ['Эксперт RnD','Аналитик','Архитектор','UX/UI','C#','Py','React','QA']
+    _trz_cols = [f"трз {r}" for r in _roles if f"трз {r}" in df.columns]
+    if _trz_cols:
+        _num = df[_trz_cols].replace(',', '.', regex=True).apply(pd.to_numeric, errors='coerce').fillna(0)
+        _tmp = df[[column_epic_name]].copy()
+        _tmp[_trz_cols] = _num
+        task_sum = _tmp.groupby(column_epic_name, dropna=False)[_trz_cols].sum().reset_index()
+        task_sum["Итого"] = task_sum[_trz_cols].sum(axis=1)
+        task_sum = task_sum.sort_values("Итого", ascending=False)
+        task_sum.insert(1, "Итого", task_sum.pop("Итого"))
+        st.subheader("Сумма ТРЗ по эпикам")
+        highlight = JsCode("""
+            function(params) {
+                let v = params.value;
+                if (v > 40) {return {'color':'white','backgroundColor':'#d9534f'};}
+                if (v >= 35 && v <= 49) {return {'backgroundColor':'#f0ad4e'};}
+                return {};
+            }
+        """)
+        gb_tasks = GridOptionsBuilder.from_dataframe(task_sum)
+        gb_tasks.configure_default_column(resizable=True, sortable=True)
+        gb_tasks.configure_column('Итого', cellStyle=highlight)
+        AgGrid(task_sum, gridOptions=gb_tasks.build(), height=320, update_mode=GridUpdateMode.NO_UPDATE)
+except Exception as e:
+    st.warning(f"Не удалось построить свод по задачам: {e}")
 
 df_f = df_g.dropna(subset=['Дата начала', 'Дата окончания']).copy()
 
@@ -444,12 +347,12 @@ col_start, col_end = st.columns(2)
 with col_start:
     period_start = st.date_input(
         "Период: начало",
-        value=pd.to_datetime(df_f['Дата начала'].min()).date()
+        value=pd.to_datetime('15.09.2025').date()#pd.to_datetime(df_f['Дата начала'].min()).date()
     )
 with col_end:
     period_end   = st.date_input(
         "Период: конец",
-        value=pd.to_datetime(df_f['Дата окончания'].max()).date()
+        value=pd.to_datetime('15.11.2025').date()#pd.to_datetime(df_f['Дата окончания'].max()).date()
     )
 df_f['Дата начала'] = pd.to_datetime(df_f['Дата начала'], errors='coerce')
 df_f['Дата окончания'] = pd.to_datetime(df_f['Дата окончания'], errors='coerce')
@@ -571,7 +474,7 @@ st.plotly_chart(fig, use_container_width=True)
 
 
 # Тепловая карта ежедневной загрузки и отпуска
-import plotly.express as px
+
 
 # Сформируем матрицу: index=Исполнитель, cols=даты спринта
 df_f = df_f.dropna()
