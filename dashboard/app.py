@@ -3,7 +3,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 from st_aggrid.shared import JsCode
 
 import pandas as pd
-from pandas.tseries.offsets import BusinessDay
+from pandas.tseries.offsets import BusinessDay as BDay
 from functools import partial
 import numpy as np
 import plotly.express as px
@@ -129,67 +129,85 @@ with st.expander("Режим работы", expanded=False):
 # st.subheader("Таблица для Ганта")
 st.session_state.df_gantt = transform_backlog_to_summary(df,df_sprint,column_epic_name,column_task_name,mode)
 df_g = st.session_state.df_gantt
-# st.write(df_g)
+# --- merge со спринтами ---
+df_g = (st.session_state.df_gantt
+        .merge(df_sprint[['Номер спринта','Дата начала','Дата окончания']],
+               on='Номер спринта', how='left')
+        .rename(columns={'Дата начала':'Дата начала спринта',
+                         'Дата окончания':'Дата окончания спринта'}))
 
-df_g = pd.merge(
-    st.session_state.df_gantt,
-    df_sprint[['Номер спринта', 'Дата начала', 'Дата окончания']], on="Номер спринта",how="left")
+df_g['Sprint_Start'] = pd.to_datetime(df_g['Дата начала спринта'])
+df_g['Sprint_End']   = pd.to_datetime(df_g['Дата окончания спринта'])
 
-# 1) Переименуем колонки спринта, чтобы не путаться
-df_g.rename(columns={'Дата начала': 'Дата начала спринта','Дата окончания': 'Дата окончания спринта'},inplace=True)
 
-df_g['Sprint_Start'] = df_g['Дата начала спринта']
-df_g['Sprint_End'] = df_g['Дата окончания спринта']
+# TRZ -> int >= 1
+df_g['ТРЗ'] = (pd.to_numeric(df_g['ТРЗ'], errors='coerce')
+                 .fillna(0).round().astype(int))#.clip(lower=1))
 
-# Приводим Sprint_Start в datetime и заполняем ТРЗ
-df_g['Sprint_Start'] = pd.to_datetime(df_g['Sprint_Start'])
-df_g["ТРЗ"] = (
-      pd.to_numeric(df_g["ТРЗ"], errors="coerce")   # всё, что нельзя в число -> NaN
-      .fillna(1)                                  # заменяем NaN на 1
-      .astype(int)                                # теперь можно в int
-)
+# --- ключи связки работ в одну «задачу» ---
+task_keys = [c for c in ['Название задачи','Номер спринта'] if c in df_g.columns]
+if not task_keys:  # запасной вариант
+    task_keys = ['Название задачи']
+# task_keys = [c for c in task_keys_all if c in df_g.columns]
+# df_g[task_keys] = df_g[task_keys].fillna('—')
 
-# 1) Считаем предварительные начала/концы:
-#    - для Аналитик/UX/UI они стартуют сразу в Sprint_Start
-#    - все остальные (включая QA) пока считаем стартующими после Sprint_Start
-df_g['Start_calc'] = df_g['Sprint_Start']
-df_g['Finish_calc'] = df_g['Start_calc'] + df_g['ТРЗ'].apply(BusinessDay)
+# --- фазовая модель: A (аналитика) -> D (dev) -> Q (QA) ---
+df_g['Роль'] = df_g['Роль'].astype(str).str.strip()
 
-# 2) Определяем момент, когда заканчиваются Аналитик+UX/UI (AD_finish):
-task_keys = ['Feature (модуль)','Направление','Название крупная задача (ЭПИК)','Номер спринта']
-mask_ad = df_g['Роль'].isin(['Эксперт RnD','Аналитик','Архитектор'])
-ad_finish = (df_g[mask_ad]
-             .groupby(task_keys)['Finish_calc']
-             .max()
-             .reset_index()
-             .rename(columns={'Finish_calc':'AD_finish'}))
-df_g = df_g.merge(ad_finish, on=task_keys, how='left')
+role_to_phase = {
+    # Аналитика / подготовка
+    'Аналитик':'A', 'Архитектор':'A', 'Эксперт RnD':'A', 'UX/UI':'A', 'Системный аналитик':'A',
+    # QA
+    'QA':'Q', 'Тестировщик':'Q', 'Тестирование':'Q'
+}
+# всё, что не A и не Q, считаем разработкой (D)
+df_g['phase'] = df_g['Роль'].map(role_to_phase).fillna('D')
 
-# 3) Пересчитаем для всех ролей (кроме AD) их реальные Start/Finish относительно AD_finish:
-#    - Аналитик/UX/UI: уже правильно
-#    - остальные кроме QA: стартуют из AD_finish
-mask_non_ad = ~df_g['Роль'].isin(['Эксперт RnD','Аналитик','Архитектор','UX/UI','QA'])
-df_g.loc[mask_non_ad, 'Start_calc'] = df_g.loc[mask_non_ad, 'AD_finish']
-df_g.loc[mask_non_ad, 'Finish_calc'] = (
-    df_g.loc[mask_non_ad, 'Start_calc']+ df_g.loc[mask_non_ad, 'ТРЗ'].apply(BusinessDay)
-)
+# --- 1) Считаем A (аналитика): стартуют от начала спринта ---
+mask_A = df_g['phase'].eq('A')
+df_g.loc[mask_A, 'Start_calc']  = df_g.loc[mask_A, 'Sprint_Start']
+df_g.loc[mask_A, 'Finish_calc'] = df_g.loc[mask_A, 'Start_calc'] + df_g.loc[mask_A, 'ТРЗ'].apply(BDay)
 
-# 4) Вычисляем, когда все НЕ-QA роли завершатся:
-nonqa_finish = (
-    df_g[~df_g['Роль'].eq('QA')]
-    .groupby(task_keys)['Finish_calc']
-    .max()
-    .reset_index()
-    .rename(columns={'Finish_calc':'NonQA_finish'})
-)
-df_g = df_g.merge(nonqa_finish, on=task_keys, how='left')
+# Групповой финиш аналитики
+a_finish = (df_g[mask_A]
+            .groupby(task_keys, dropna=False)['Finish_calc']
+            .max()
+            .reset_index()
+            .rename(columns={'Finish_calc':'A_finish'}))
+df_g = df_g.merge(a_finish, on=task_keys, how='left')
+# если аналитики нет — берём начало спринта
+df_g['A_finish'] = df_g['A_finish'].fillna(df_g['Sprint_Start'])
 
-# 5) Наконец — для QA: стартуем после NonQA_finish и считаем свой Finish:
-mask_qa = df_g['Роль'].eq('QA')
-df_g.loc[mask_qa, 'Start_calc'] = df_g.loc[mask_qa, 'NonQA_finish']
-df_g.loc[mask_qa, 'Finish_calc'] = (
-    df_g.loc[mask_qa, 'Start_calc']+ df_g.loc[mask_qa, 'ТРЗ'].apply(BusinessDay)
-)
+# --- 2) Считаем D (разработка): стартуют после A_finish ---
+mask_D = df_g['phase'].eq('D')
+df_g.loc[mask_D, 'Start_calc']  = df_g.loc[mask_D, 'A_finish']
+df_g.loc[mask_D, 'Finish_calc'] = df_g.loc[mask_D, 'Start_calc'] + df_g.loc[mask_D, 'ТРЗ'].apply(BDay)
+
+# Групповой финиш разработки
+d_finish = (df_g[mask_D]
+            .groupby(task_keys, dropna=False)['Finish_calc']
+            .max()
+            .reset_index()
+            .rename(columns={'Finish_calc':'D_finish'}))
+df_g = df_g.merge(d_finish, on=task_keys, how='left')
+# если разработки нет — финиш разработки = финишу аналитики
+df_g['D_finish'] = df_g['D_finish'].fillna(df_g['A_finish'])
+
+# --- 3) Считаем Q (QA): стартуют после D_finish (никогда раньше разработки) ---
+mask_Q = df_g['phase'].eq('Q')
+df_g.loc[mask_Q, 'Start_calc']  = df_g.loc[mask_Q, 'D_finish']
+df_g.loc[mask_Q, 'Finish_calc'] = df_g.loc[mask_Q, 'Start_calc'] + df_g.loc[mask_Q, 'ТРЗ'].apply(BDay)
+
+# Приводим типы
+df_g['Start_calc']  = pd.to_datetime(df_g['Start_calc'])
+df_g['Finish_calc'] = pd.to_datetime(df_g['Finish_calc'])
+
+# --- sanity-check: QA не раньше разработки ---
+# if mask_Q.any() and mask_D.any():
+#     chk = (df_g[mask_Q][task_keys + ['Start_calc']]
+#            .merge(d_finish, on=task_keys, how='left'))
+#     assert (chk['Start_calc'] >= chk['D_finish']).all(), "QA стартует раньше разработки — проверь ключи группировки task_keys"
+
 # st.write(df_g)
 
 # 6) Переименуем в понятные столбцы и отформатируем для AgGrid:
@@ -204,7 +222,9 @@ st.subheader("Gantt-диаграмма поэтапная")
 st.info("Данная диаграмма учитывает последовательность разработки - сначала Аналитик/UX/UI/Архитектор (по макс времени), потом роли разработки (также по макс) и затем QA.")
 settings_gant1 = ui_gantt_settings(df_g, prefix="plotly", title="⚙️ Настройки",default_y_idx=0,default_task_idx=1,default_color_idx=2)
 # подготовка данных
-gantt_df = df_g[[settings_gant1['task_col'], settings_gant1['start_col'], settings_gant1['end_col'], settings_gant1['y_axis'], settings_gant1['color_by']]].copy()
+# gantt_df = df_g[[settings_gant1['task_col'], settings_gant1['start_col'], settings_gant1['end_col'], settings_gant1['y_axis'], settings_gant1['color_by']]].copy()
+gantt_df = df_g[[settings_gant1['task_col'], settings_gant1['start_col'], settings_gant1['end_col'],'Y_Group', settings_gant1['color_by']]].copy()
+
 gantt_df[settings_gant1['start_col']] = pd.to_datetime(gantt_df[settings_gant1['start_col']], errors='coerce')
 gantt_df[settings_gant1['end_col']]   = pd.to_datetime(gantt_df[settings_gant1['end_col']], errors='coerce')
 gantt_df.columns = ["Task", "Start", "Finish", "Y_Group", "Resource"]
@@ -215,7 +235,7 @@ else:
     asc_desc=False  
 theme_key, theme, template_name = ui_theme_picker(expanded=False, default_key="pastel",)
 with st.expander("График", expanded=True):
-    plot_gantt(gantt_df.sort_values(by=[settings_gant1['sort_val_first']],ascending=asc_desc),
+    plot_gantt(gantt_df.sort_values(by=[settings_gant1['sort_val_first'],"Start"],ascending=asc_desc),
                 #    start_column="Start",#settings_gant2["start_col"],
                 #    end_column="Finish",#settings_gant2["end_col"],
                 #    y_group=settings_gant1['y_axis'],
@@ -247,7 +267,7 @@ with st.expander("График", expanded=True):
     plot_gantt(lane_df,
                 start_column="Start",
                 end_column="Finish",
-                y_group=settings_gant2['y_axis'],
+                y_group="Track",#settings_gant2['y_axis'],
                 color_column=settings_gant2["color_by"],
                 text_column=settings_gant2["task_col"],
                 graph_title="График занятости",
@@ -317,8 +337,8 @@ with col_end:
         "Период: конец",
         value=pd.to_datetime('15.11.2025').date()#pd.to_datetime(df_f['Дата окончания'].max()).date()
     )
-df_f['Дата начала'] = pd.to_datetime(df_f['Дата начала'], errors='coerce')
-df_f['Дата окончания'] = pd.to_datetime(df_f['Дата окончания'], errors='coerce')
+# df_f['Start_calc'] = pd.to_datetime(df_f['Дата начала'], errors='coerce')
+# df_f['Finish'] = pd.to_datetime(df_f['Дата окончания'], errors='coerce')
 df_f = df_f[(df_f['Дата начала'].dt.date >= period_start) &
             (df_f['Дата окончания'].dt.date <= period_end)]
         

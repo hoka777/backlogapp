@@ -128,18 +128,10 @@ def transform_backlog_to_summary(backlog_df,df_sprint,column_epic,column_task,mo
         # summary_df["Дата конца"] = summary_df["Дата конца"].dt.strftime("%Y-%m-%d")
 
         if mode == "Эпики":
-            summary_df = (summary_df
-                .groupby(["Название крупная задача (ЭПИК)", "Роль"], dropna=False)
-                .agg({
-                    "Feature (модуль)": lambda x: x.dropna().iloc[0] if not x.dropna().empty else None,
-                    "Направление":      lambda x: x.dropna().iloc[0] if not x.dropna().empty else None,
-                    "Исполнитель":      lambda x: x.mode().iloc[0] if not x.mode().empty else None,
-                    "ТРЗ":              "sum",
-                    "Номер спринта":    "min"
-                })
-                .reset_index()
-)
-
+            summary_df["Y_Group"] = summary_df["Название крупная задача (ЭПИК)"]
+        else:
+            summary_df["Y_Group"] = summary_df["Название задачи"]
+        
         return summary_df
 
 

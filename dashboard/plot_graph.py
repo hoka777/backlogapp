@@ -41,7 +41,7 @@ def ui_gantt_settings(
             with col1:
                 st.write("Фильтры")
                 task_col  = st.selectbox("Подпись в тултипе", cols_all, index=_safe_idx(default_task_idx), key=f"{prefix}_task")
-                y_axis    = st.selectbox("Группировать по (ось Y)", cols_all, index=_safe_idx(default_y_idx), key=f"{prefix}_y")
+                # y_axis    = st.selectbox("Группировать по (ось Y)", cols_all, index=_safe_idx(default_y_idx), key=f"{prefix}_y")
                 color_by  = st.selectbox("Окрашивать по", cols_all, index=_safe_idx(default_color_idx), key=f"{prefix}_color")
 
                 # фиксированные поля дат, как у тебя
@@ -70,7 +70,7 @@ def ui_gantt_settings(
 
     return {
         "task_col": task_col,
-        "y_axis": y_axis,
+        # "y_axis": y_axis,
         "color_by": color_by,
         "start_col": start_col,
         "end_col": end_col,
