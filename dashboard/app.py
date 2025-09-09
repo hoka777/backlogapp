@@ -54,7 +54,8 @@ st.session_state.df_people = load_data(uploaded_file, 'ШТАТ(дашборд)'
 st.session_state.df_sprint = load_data(uploaded_file, 'Спринты(дашборд)')
 st.session_state.df_leave = load_data(uploaded_file, 'Отпуска(дашборд)')
 
-df = st.session_state.df
+df = st.session_state.df[(st.session_state.df['квартал Ира'] == 4)]#[(st.session_state.df['CORE'] == 2) & (st.session_state.df['квартал Ира'] == 4)]
+
 df_sprint = st.session_state.df_sprint
 df_people = st.session_state.df_people
 df_leave = st.session_state.df_leave
@@ -220,7 +221,12 @@ df_g['Дата окончания'] = df_g['Finish_calc']#.dt.strftime('%Y-%m-%d
 # --- Настройка и отображение Gantt-диаграммы --- 
 st.subheader("Gantt-диаграмма поэтапная")
 st.info("Данная диаграмма учитывает последовательность разработки - сначала Аналитик/UX/UI/Архитектор (по макс времени), потом роли разработки (также по макс) и затем QA.")
-settings_gant1 = ui_gantt_settings(df_g, prefix="plotly", title="⚙️ Настройки",default_y_idx=0,default_task_idx=1,default_color_idx=2)
+settings_gant1 = ui_gantt_settings(df_g, prefix="plotly", 
+                                   title="⚙️ Настройки",
+                                   default_y_idx=0,
+                                   default_task_idx=6,
+                                   default_color_idx=0,
+                                   default_sort_first="Resource")
 # подготовка данных
 # gantt_df = df_g[[settings_gant1['task_col'], settings_gant1['start_col'], settings_gant1['end_col'], settings_gant1['y_axis'], settings_gant1['color_by']]].copy()
 gantt_df = df_g[[settings_gant1['task_col'], settings_gant1['start_col'], settings_gant1['end_col'],'Y_Group', settings_gant1['color_by']]].copy()
@@ -281,6 +287,59 @@ with st.expander("График", expanded=True):
                 theme=theme1,
                 sprint_df=st.session_state.df_sprint,
                 )
+# =========================================================
+# Gantt-диаграмма распределения по людям
+# =========================================================
+st.subheader("Gantt-диаграмма по исполнителям")
+st.info("Ось Y — Исполнитель. Цвет — Роль. Пересечения задач разводим по дорожкам (lane).")
+
+# 1) Готовим датафрейм под настройки виджета (как в первых диаграммах):
+people_base = df_g.copy()
+people_base["Y_Group"] = people_base["Исполнитель"].fillna("—")  # ось Y = Исполнитель
+
+# Настройки (оставляем те же контролы; старт/финиш у нас фикс. поля)
+settings_people = ui_gantt_settings(
+    people_base,
+    prefix="plotly_people",
+    title="⚙️ Настройки (по исполнителям)",
+    # по умолчанию tooltip — "Название задачи", цвет — "Роль"
+    default_task_idx = people_base.columns.get_loc("Название задачи") if "Название задачи" in people_base.columns else 0,
+    default_color_idx = people_base.columns.get_loc("Роль") if "Роль" in people_base.columns else 0,
+    default_width = 1700,
+    default_height = 1000,
+    default_sort_first = "Y_Group",   # сначала группируем по исполнителю
+    default_asc_desc  = "ASC",
+)
+
+# 2) Собираем минимальный фрейм для plot_gantt и переименовываем поля под его контракт:
+people_gantt = people_base[[settings_people["task_col"],
+                            settings_people["start_col"],
+                            settings_people["end_col"],
+                            "Y_Group",
+                            settings_people["color_by"]]].copy()
+people_gantt.columns = ["Task", "Start", "Finish", "Y_Group", "Resource"]
+
+# 3) Рисуем: включаем bar_mode=True, чтобы пересекающиеся задачи одного исполнителя разводились по лейнам.
+theme_key_p, theme_p, template_name_p = ui_theme_picker(expanded=False, default_key="soft_dark", suffix="people")
+
+with st.expander("График (по исполнителям)", expanded=True):
+    plot_gantt(
+        people_gantt.sort_values(by=[settings_people["sort_val_first"], "Start"],
+                                 ascending=(settings_people["asc_desc"] == "ASC")),
+        graph_title="Занятость по исполнителям",
+        font_size=settings_people["font_size"],
+        width_plot=settings_people["width_plot"],
+        height_plot=settings_people["height_plot"],
+        fit_names=settings_people["fit_names"],
+        font_size_names=settings_people["font_size_names"],
+        max_len=settings_people["max_len"],
+        swap_text=settings_people["swap_text"],
+        theme=theme_p,
+        template_name=template_name_p,
+        sprint_df=st.session_state.df_sprint,
+        bar_mode=True  # <<< ключ: разводит пересечения задач по дорожкам
+    )
+
 
 ############################################################
 # ===== Сводная таблица ТРЗ по стекам и общая =====
@@ -424,9 +483,9 @@ st.plotly_chart(fig, use_container_width=True)
 
 # Тепловая карта ежедневной загрузки и отпуска
 
-
+# st.write(df_f)
 # Сформируем матрицу: index=Исполнитель, cols=даты спринта
-df_f = df_f.dropna()
+df_f = df_f#.dropna()
 dates = pd.date_range(
     df_f['Дата начала'].dropna().min(),
     df_f['Дата окончания'].dropna().max(),
@@ -474,6 +533,7 @@ sprint_vol = (
     .sum()
     .reset_index(name='Объём TRЗ')
 )
+
 fig = px.bar(
     sprint_vol,
     x='Номер спринта',
