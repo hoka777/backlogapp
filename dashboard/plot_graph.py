@@ -318,7 +318,7 @@ def add_date_markers(
         if label_y == "inside":
             y, yanchor = 1.0, "auto"    # внутри области графика, у верхней кромки
         else:
-            y, yanchor = 1.01, "bottom"  # над графиком — нужен чуть больший margin.t
+            y, yanchor = 1.04, "bottom"  # над графиком — нужен чуть больший margin.t
 
         fig.add_annotation(
             x=d, y=y,
