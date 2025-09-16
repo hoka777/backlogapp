@@ -288,9 +288,9 @@ def add_date_markers(
     markers: list[dict],
     *,
     line_color="#FF4D4D",
-    line_width=2,
+    line_width=1,
     line_dash="dash",        # "solid" | "dash" | "dot" | "dashdot"
-    label_color="#FF4D4D",
+    label_color="#000000",
     label_font_size=14,
     label_y="above",         # "above" (над графиком) | "inside" (вверху внутри)
     label_textangle=90,     # -90 → вертикальная подпись
@@ -515,8 +515,8 @@ def plot_gantt(
         ]
     fig = add_date_markers(
         fig, markers,
-        line_color="#FF4D4D", line_width=2, line_dash="dash",
-        label_color="#FF4D4D", label_font_size=11,
+        line_color="#FF4D4D", line_width=1, line_dash="dash",
+        label_color="#000000", label_font_size=11,
         label_y="inside",        # или "above"
         label_textangle= 90      # вертикальная подпись
     )
