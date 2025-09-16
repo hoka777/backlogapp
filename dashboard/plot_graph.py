@@ -517,7 +517,7 @@ def plot_gantt(
         fig, markers,
         line_color="#FF4D4D", line_width=2, line_dash="dash",
         label_color="#FF4D4D", label_font_size=11,
-        label_y="above",        # или "above"
+        label_y="inside",        # или "above"
         label_textangle= 90      # вертикальная подпись
     )
     # вывод
