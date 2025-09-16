@@ -518,7 +518,7 @@ def plot_gantt(
         line_color="#FF4D4D", line_width=2, line_dash="dash",
         label_color="#FF4D4D", label_font_size=11,
         label_y="above",        # или "above"
-        label_textangle= -90      # вертикальная подпись
+        label_textangle= 90      # вертикальная подпись
     )
     # вывод
     chart_html = fig.to_html(include_plotlyjs='cdn', full_html=False)
