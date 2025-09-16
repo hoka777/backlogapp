@@ -508,8 +508,10 @@ def plot_gantt(
         )
 
     markers = [
-        {"date": "2025-11-14", "text": "Freeze"},
-        {"date": "2025-12-15", "text": "Release 1.0"},
+        {"date": "2025-11-17", "text": "Ветка на ПРОД"},
+        {"date": "2025-11-28", "text": "Ветка на ЮАТ"},
+        {"date": "2025-12-12", "text": "Закрытие заказ-наряда Q4/J,Обновление ПРОД"},
+        {"date": "2025-12-26", "text": "Ветка на ПРОД"},
         ]
     fig = add_date_markers(
         fig, markers,

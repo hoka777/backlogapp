@@ -145,6 +145,8 @@ df_g['Sprint_End']   = pd.to_datetime(df_g['Дата окончания спри
 df_g['ТРЗ'] = (pd.to_numeric(df_g['ТРЗ'], errors='coerce')
                  .fillna(0).round().astype(int))#.clip(lower=1))
 
+
+
 # --- ключи связки работ в одну «задачу» ---
 task_keys = [c for c in ['Название задачи','Номер спринта'] if c in df_g.columns]
 if not task_keys:  # запасной вариант
