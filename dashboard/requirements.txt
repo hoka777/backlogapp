@@ -9,3 +9,8 @@ tornado==6.2
 urllib3==1.26.14
 watchdog==6.0.0
 openpyxl==3.1.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.2
+gsheetsdb==0.1.13.1
+gspread==6.2.1
+gspread-dataframe==4.0.0
