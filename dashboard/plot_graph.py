@@ -454,11 +454,11 @@ def plot_gantt(
 
     # --- СПРИНТЫ: только от первой задачи, лейблы видимые ---
     if sprint_df is not None and len(sprint_df) > 0:
-        
+
         first_task_start = pd.to_datetime(gantt_df[start_column]).min()
         s = sprint_df.copy()
-        s["Дата начала"] = pd.to_datetime(s["Дата начала"], errors="coerce")
-        s["Дата окончания"] = pd.to_datetime(s["Дата окончания"], errors="coerce")
+        s["Дата начала"] = pd.to_datetime(s["Дата начала"],format='%d.%m.%Y', errors="coerce")
+        s["Дата окончания"] = pd.to_datetime(s["Дата окончания"],format='%d.%m.%Y', errors="coerce")
         s = s[s["Дата окончания"] >= first_task_start].dropna(subset=["Дата начала", "Дата окончания"])
 
         label_color = sprint_label_color or theme.get("text_color", "#E8EAED")
@@ -483,16 +483,18 @@ def plot_gantt(
                     x=x0 + (x1 - x0)/2, y=1.0, xref="x", yref="paper",
                     text=text, showarrow=False, align="center",
                     yanchor="top",
-                    font=dict(size=font_size, color=label_color),
-                    bgcolor="rgba(0,0,0,0)", borderpad=2
+                    font=dict(size=font_size-2, color=label_color),
+                    bgcolor="rgba(0,0,0,0)", borderpad=2,
+                    textangle=90, 
                 )
             else:
                 # над графиком (нужен больший margin.t)
                 fig.add_annotation(
-                    x=x0 + (x1 - x0)/2, y=1.02, xref="x", yref="paper",
+                    x=x0 + (x1 - x0)/2, y=1.0, xref="x", yref="paper",
                     text=text, showarrow=False, align="center",
                     yanchor="bottom",
-                    font=dict(size=font_size, color=label_color),
+                    font=dict(size=font_size-2, color=label_color),
+                    textangle=90, 
                 )
 
     # зебра по дорожкам
@@ -508,10 +510,10 @@ def plot_gantt(
         )
 
     markers = [
-        {"date": "2025-11-17", "text": "Ветка на ПРОД"},
-        {"date": "2025-11-28", "text": "Ветка на ЮАТ"},
-        {"date": "2025-12-12", "text": "Закрытие заказ-наряда Q4/J,Обновление ПРОД"},
-        {"date": "2025-12-26", "text": "Ветка на ПРОД"},
+        # {"date": "2025-11-17", "text": "Ветка на ПРОД"},
+        # {"date": "2025-11-28", "text": "Ветка на ЮАТ"},
+        # {"date": "2025-12-12", "text": "Закрытие заказ-наряда Q4/J,Обновление ПРОД"},
+        # {"date": "2025-12-26", "text": "Ветка на ПРОД"},
         ]
     fig = add_date_markers(
         fig, markers,

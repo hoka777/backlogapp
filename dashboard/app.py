@@ -2,6 +2,14 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 from st_aggrid.shared import JsCode
 
+
+from google.oauth2.service_account import Credentials
+from gspread_dataframe import set_with_dataframe, get_as_dataframe
+from gspread.worksheet import Worksheet
+import gspread
+import pandas as pd
+from gspread.worksheet import Worksheet
+
 import pandas as pd
 from pandas.tseries.offsets import BusinessDay as BDay
 from functools import partial
@@ -15,46 +23,75 @@ from utils import transform_backlog_to_summary, \
                 working_hours_between,\
                 transform_gantt
 
-
-
-AgGrid = partial(AgGrid, allow_unsafe_jscode=True)
 ##############################################################################
 # ---  Настройка страницы --- 
 st.set_page_config(
     page_title="Мой дашборд", layout="wide", initial_sidebar_state="expanded")
 
 ##############################################################################
-# --- Загрузка данных ---
-st.sidebar.header("Загрузка файла")
-uploaded_file = st.sidebar.file_uploader("Выберите Excel-файл", type=["xlsx", "xls"])
-@st.cache_data
-def load_data(file,sheet) -> pd.DataFrame:
-    return pd.read_excel(file,sheet_name=sheet)
 
-if not uploaded_file:
-    st.sidebar.info("Загрузите файл для начала работы")
-    st.stop()
 
-xls = pd.ExcelFile(uploaded_file)
-sheet_names = xls.sheet_names
+SHEET_URL = st.secrets['excel']['SHEET_URL']
+SERVICE_ACCOUNT = st.secrets['google_service_account']
+SCOPES = st.secrets['excel']['SCOPES']
+def get_gspread_client():
+    """Создать авторизованный клиент gspread из секретов"""
+    creds = Credentials.from_service_account_info(SERVICE_ACCOUNT, scopes=SCOPES)
+    return gspread.authorize(creds)
+gc = get_gspread_client()
 
-# Показываем выпадающий список в сайдбаре
-selected_sheet = st.sidebar.selectbox(
-    "Выберите лист где находится бэклог",
-    options=sheet_names,
-    index=6,                 # по умолчанию первый лист
-    key="main_sheet"
-)
+sh = gc.open_by_url(SHEET_URL)
+# worksheet = sh.worksheet('Декомпозиция (story, enablers)')
+# data = worksheet.get_all_records()
+# df = pd.DataFrame(data)
+# # st.write(df)
+
+# AgGrid = partial(AgGrid, allow_unsafe_jscode=True)
+
+# # --- Загрузка данных ---
+# st.sidebar.header("Загрузка файла")
+# uploaded_file = st.sidebar.file_uploader("Выберите Excel-файл", type=["xlsx", "xls"])
+# @st.cache_data
+# def load_data(file,sheet) -> pd.DataFrame:
+#     return pd.read_excel(file,sheet_name=sheet)
+
+# if not uploaded_file:
+#     st.sidebar.info("Загрузите файл для начала работы")
+#     st.stop()
+
+# xls = pd.ExcelFile(uploaded_file)
+# sheet_names = xls.sheet_names
+
+# # Показываем выпадающий список в сайдбаре
+# selected_sheet = st.sidebar.selectbox(
+#     "Выберите лист где находится бэклог",
+#     options=sheet_names,
+#     index=2,                 
+#     key="main_sheet"
+# )
+
+
+
 
 ##############################################################################
 # --- Основные настройки --- 
 # Изначальная загрузка данных и инициализация в session_state
-st.session_state.df = load_data(uploaded_file, selected_sheet)
-st.session_state.df_people = load_data(uploaded_file, 'ШТАТ(дашборд)')
-st.session_state.df_sprint = load_data(uploaded_file, 'Спринты(дашборд)')
-st.session_state.df_leave = load_data(uploaded_file, 'Отпуска(дашборд)')
+# st.session_state.df = load_data(uploaded_file, selected_sheet)
+# st.session_state.df_people = load_data(uploaded_file, 'ШТАТ(дашборд)')
+# st.session_state.df_sprint = load_data(uploaded_file, 'Спринты(дашборд)')
+# st.session_state.df_leave = load_data(uploaded_file, 'Отпуска(дашборд)')
+worksheet_1 = sh.worksheet('Декомпозиция (story, enablers)')
+worksheet_2 = sh.worksheet('Штат(дашборд)')
+worksheet_3 = sh.worksheet('Спринты(дашборд)')
+worksheet_4 = sh.worksheet('Отпуска')
 
-df = st.session_state.df[(st.session_state.df['квартал Ира'] == 4)]#[(st.session_state.df['CORE'] == 2) & (st.session_state.df['квартал Ира'] == 4)]
+
+st.session_state.df         = pd.DataFrame(worksheet_1.get_all_records())
+st.session_state.df_people  = pd.DataFrame(worksheet_2.get_all_records())
+st.session_state.df_sprint  = pd.DataFrame(worksheet_3.get_all_records())
+st.session_state.df_leave   = pd.DataFrame(worksheet_4.get_all_records())
+
+df = st.session_state.df#[(st.session_state.df['квартал Ира'] == 4)]#[(st.session_state.df['CORE'] == 2) & (st.session_state.df['квартал Ира'] == 4)]
 
 df_sprint = st.session_state.df_sprint
 df_people = st.session_state.df_people
@@ -62,7 +99,7 @@ df_leave = st.session_state.df_leave
 
 
 # Кнопка для сброса изменений исходной таблицы
-df_original = load_data(uploaded_file, selected_sheet)#'Лист1')
+# df_original = load_data(uploaded_file, selected_sheet)#'Лист1')
 # def reset_data():
 #     st.session_state.df = df_original.copy()
 # st.sidebar.button("Сбросить исходную таблицу", on_click=reset_data)
@@ -111,9 +148,9 @@ with st.expander("Выбор исходных данных", expanded=False):
     st.error("! Выберете названия колонок, где находятся названия эпиков и декомпозированных задач соответсвенно!")
     col1, col2 = st.columns(2)
     with col1:
-        column_epic_name  = st.selectbox("Эпики", df.columns.unique().to_list(), index=10)
+        column_epic_name  = st.selectbox("Эпики", df.columns.unique().to_list(), index=7)
     with col2:
-        column_task_name  = st.selectbox("Задачи", df.columns.unique().to_list(), index=13)
+        column_task_name  = st.selectbox("Задачи", df.columns.unique().to_list(), index=11)
 st.write('  ')
 st.write('  ')
 with st.expander("Режим работы", expanded=False):
@@ -131,21 +168,36 @@ with st.expander("Режим работы", expanded=False):
 st.session_state.df_gantt = transform_backlog_to_summary(df,df_sprint,column_epic_name,column_task_name,mode)
 df_g = st.session_state.df_gantt
 # --- merge со спринтами ---
-df_g = (st.session_state.df_gantt
+df_sprint["Номер спринта"] = pd.to_numeric(df_sprint["Номер спринта"], errors="coerce").astype("Int64")  # nullable int
+df_g["Номер спринта"] = pd.to_numeric(df_g["Номер спринта"], errors="coerce").astype("Int64")  # nullable int
+
+
+
+df_g = (df_g#st.session_state.df_gantt
         .merge(df_sprint[['Номер спринта','Дата начала','Дата окончания']],
                on='Номер спринта', how='left')
         .rename(columns={'Дата начала':'Дата начала спринта',
                          'Дата окончания':'Дата окончания спринта'}))
 
-df_g['Sprint_Start'] = pd.to_datetime(df_g['Дата начала спринта'])
-df_g['Sprint_End']   = pd.to_datetime(df_g['Дата окончания спринта'])
+# df_g['Sprint_Start'] = pd.to_datetime(df_g['Дата начала спринта'])
+# df_g['Sprint_End']   = pd.to_datetime(df_g['Дата окончания спринта'])
+df_g['Sprint_Start'] = pd.to_datetime(
+    df_g['Дата начала спринта'],
+    format='%d.%m.%Y',
+    # dayfirst=True,
+    # errors='coerce'
+)
+df_g['Sprint_End'] = pd.to_datetime(
+    df_g['Дата окончания спринта'],
+    format='%d.%m.%Y',
+    dayfirst=True,
+    # errors='coerce'
+)
 
 
 # TRZ -> int >= 1
 df_g['ТРЗ'] = (pd.to_numeric(df_g['ТРЗ'], errors='coerce')
                  .fillna(0).round().astype(int))#.clip(lower=1))
-
-
 
 # --- ключи связки работ в одну «задачу» ---
 task_keys = [c for c in ['Название задачи','Номер спринта'] if c in df_g.columns]
@@ -292,55 +344,55 @@ with st.expander("График", expanded=True):
 # =========================================================
 # Gantt-диаграмма распределения по людям
 # =========================================================
-st.subheader("Gantt-диаграмма по исполнителям")
-st.info("Ось Y — Исполнитель. Цвет — Роль. Пересечения задач разводим по дорожкам (lane).")
+# st.subheader("Gantt-диаграмма по исполнителям")
+# st.info("Ось Y — Исполнитель. Цвет — Роль. Пересечения задач разводим по дорожкам (lane).")
 
-# 1) Готовим датафрейм под настройки виджета (как в первых диаграммах):
-people_base = df_g.copy()
-people_base["Y_Group"] = people_base["Исполнитель"].fillna("—")  # ось Y = Исполнитель
+# # 1) Готовим датафрейм под настройки виджета (как в первых диаграммах):
+# people_base = df_g.copy()
+# people_base["Y_Group"] = people_base["Исполнитель"].fillna("—")  # ось Y = Исполнитель
 
-# Настройки (оставляем те же контролы; старт/финиш у нас фикс. поля)
-settings_people = ui_gantt_settings(
-    people_base,
-    prefix="plotly_people",
-    title="⚙️ Настройки (по исполнителям)",
-    # по умолчанию tooltip — "Название задачи", цвет — "Роль"
-    default_task_idx = people_base.columns.get_loc("Название задачи") if "Название задачи" in people_base.columns else 0,
-    default_color_idx = people_base.columns.get_loc("Роль") if "Роль" in people_base.columns else 0,
-    default_width = 1700,
-    default_height = 1000,
-    default_sort_first = "Y_Group",   # сначала группируем по исполнителю
-    default_asc_desc  = "ASC",
-)
+# # Настройки (оставляем те же контролы; старт/финиш у нас фикс. поля)
+# settings_people = ui_gantt_settings(
+#     people_base,
+#     prefix="plotly_people",
+#     title="⚙️ Настройки (по исполнителям)",
+#     # по умолчанию tooltip — "Название задачи", цвет — "Роль"
+#     default_task_idx = people_base.columns.get_loc("Название задачи") if "Название задачи" in people_base.columns else 0,
+#     default_color_idx = people_base.columns.get_loc("Роль") if "Роль" in people_base.columns else 0,
+#     default_width = 1700,
+#     default_height = 1000,
+#     default_sort_first = "Y_Group",   # сначала группируем по исполнителю
+#     default_asc_desc  = "ASC",
+# )
 
-# 2) Собираем минимальный фрейм для plot_gantt и переименовываем поля под его контракт:
-people_gantt = people_base[[settings_people["task_col"],
-                            settings_people["start_col"],
-                            settings_people["end_col"],
-                            "Y_Group",
-                            settings_people["color_by"]]].copy()
-people_gantt.columns = ["Task", "Start", "Finish", "Y_Group", "Resource"]
+# # 2) Собираем минимальный фрейм для plot_gantt и переименовываем поля под его контракт:
+# people_gantt = people_base[[settings_people["task_col"],
+#                             settings_people["start_col"],
+#                             settings_people["end_col"],
+#                             "Y_Group",
+#                             settings_people["color_by"]]].copy()
+# people_gantt.columns = ["Task", "Start", "Finish", "Y_Group", "Resource"]
 
-# 3) Рисуем: включаем bar_mode=True, чтобы пересекающиеся задачи одного исполнителя разводились по лейнам.
-theme_key_p, theme_p, template_name_p = ui_theme_picker(expanded=False, default_key="soft_dark", suffix="people")
+# # 3) Рисуем: включаем bar_mode=True, чтобы пересекающиеся задачи одного исполнителя разводились по лейнам.
+# theme_key_p, theme_p, template_name_p = ui_theme_picker(expanded=False, default_key="soft_dark", suffix="people")
 
-with st.expander("График (по исполнителям)", expanded=True):
-    plot_gantt(
-        people_gantt.sort_values(by=[settings_people["sort_val_first"], "Start"],
-                                 ascending=(settings_people["asc_desc"] == "ASC")),
-        graph_title="Занятость по исполнителям",
-        font_size=settings_people["font_size"],
-        width_plot=settings_people["width_plot"],
-        height_plot=settings_people["height_plot"],
-        fit_names=settings_people["fit_names"],
-        font_size_names=settings_people["font_size_names"],
-        max_len=settings_people["max_len"],
-        swap_text=settings_people["swap_text"],
-        theme=theme_p,
-        template_name=template_name_p,
-        sprint_df=st.session_state.df_sprint,
-        bar_mode=True  # <<< ключ: разводит пересечения задач по дорожкам
-    )
+# with st.expander("График (по исполнителям)", expanded=True):
+#     plot_gantt(
+#         people_gantt.sort_values(by=[settings_people["sort_val_first"], "Start"],
+#                                  ascending=(settings_people["asc_desc"] == "ASC")),
+#         graph_title="Занятость по исполнителям",
+#         font_size=settings_people["font_size"],
+#         width_plot=settings_people["width_plot"],
+#         height_plot=settings_people["height_plot"],
+#         fit_names=settings_people["fit_names"],
+#         font_size_names=settings_people["font_size_names"],
+#         max_len=settings_people["max_len"],
+#         swap_text=settings_people["swap_text"],
+#         theme=theme_p,
+#         template_name=template_name_p,
+#         sprint_df=st.session_state.df_sprint,
+#         bar_mode=True  # <<< ключ: разводит пересечения задач по дорожкам
+#     )
 
 
 ############################################################
@@ -369,6 +421,7 @@ try:
         task_sum["Итого"] = task_sum[_trz_cols].sum(axis=1)
         task_sum = task_sum.sort_values("Итого", ascending=False)
         task_sum.insert(1, "Итого", task_sum.pop("Итого"))
+
         st.subheader("Сумма ТРЗ по эпикам")
         highlight = JsCode("""
             function(params) {
@@ -380,7 +433,7 @@ try:
         """)
         gb_tasks = GridOptionsBuilder.from_dataframe(task_sum)
         gb_tasks.configure_default_column(resizable=True, sortable=True)
-        gb_tasks.configure_column('Итого', cellStyle=highlight)
+        gb_tasks.configure_column('Итого')#, cellStyle=highlight)
         AgGrid(task_sum, gridOptions=gb_tasks.build(), height=320, update_mode=GridUpdateMode.NO_UPDATE)
 except Exception as e:
     st.warning(f"Не удалось построить свод по задачам: {e}")
@@ -391,19 +444,18 @@ col_start, col_end = st.columns(2)
 with col_start:
     period_start = st.date_input(
         "Период: начало",
-        value=pd.to_datetime('15.09.2025').date()#pd.to_datetime(df_f['Дата начала'].min()).date()
+        value=pd.to_datetime('01.01.2026').date()#pd.to_datetime(df_f['Дата начала'].min()).date()
     )
 with col_end:
     period_end   = st.date_input(
         "Период: конец",
-        value=pd.to_datetime('15.11.2025').date()#pd.to_datetime(df_f['Дата окончания'].max()).date()
+        value=pd.to_datetime('31.12.2026').date()#pd.to_datetime(df_f['Дата окончания'].max()).date()
     )
 # df_f['Start_calc'] = pd.to_datetime(df_f['Дата начала'], errors='coerce')
 # df_f['Finish'] = pd.to_datetime(df_f['Дата окончания'], errors='coerce')
 df_f = df_f[(df_f['Дата начала'].dt.date >= period_start) &
             (df_f['Дата окончания'].dt.date <= period_end)]
         
-
 
 # Вычисление свободной ёмкости по периодам с учётом отпусков
 st.subheader("Свободная ёмкость исполнителей в период")
@@ -414,8 +466,16 @@ for p in df_f['Исполнитель'].unique():
     # считаем дни отпуска пересечением с периодом
     vac_days = 0
     for _, v in df_leave[df_leave['Исполнитель'] == p].iterrows():
-        vs = pd.to_datetime(v['Начало']).date()
-        ve = pd.to_datetime(v['Конец']).date()
+        vs_ts = pd.to_datetime(v['НАЧАЛО'], errors="coerce")
+        ve_ts = pd.to_datetime(v['КОНЕЦ'], errors="coerce")
+
+    # если дата начала или конца отсутствует — пропускаем запись
+        if pd.isna(vs_ts) or pd.isna(ve_ts):
+            continue
+
+        vs = vs_ts.date()
+        ve = ve_ts.date()
+
         start_int = max(vs, period_start)
         end_int   = min(ve, period_end)
         if start_int <= end_int:
@@ -434,6 +494,7 @@ for p in df_f['Исполнитель'].unique():
     })
 
 df_res = pd.DataFrame(records_cap)
+
 
 # Выводим в AgGrid
 gb_cap = GridOptionsBuilder.from_dataframe(df_res)
@@ -507,9 +568,19 @@ for _, r in df_f.iterrows():
 # Отпуска пометим -1
 for _, r in df_leave.iterrows():
     p = r['Исполнитель']
-    for d in pd.date_range(r['Начало'], r['Конец'], freq='D'):
-        if d.weekday()<5 and p in cal.index and d in cal.columns:
+    start = pd.to_datetime(r['НАЧАЛО'], errors="coerce")
+    end   = pd.to_datetime(r['КОНЕЦ'], errors="coerce")
+
+    # если нет начала или конца — пропускаем запись
+    if pd.isna(start) or pd.isna(end):
+        continue
+
+    for d in pd.date_range(start, end, freq='D'):
+        if d.weekday() < 5 and p in cal.index and d in cal.columns:
             cal.at[p, d] = -1
+    # for d in pd.date_range(r['НАЧАЛО'], r['КОНЕЦ'], freq='D'):
+    #     if d.weekday()<5 and p in cal.index and d in cal.columns:
+    #         cal.at[p, d] = -1
 
 fig = px.imshow(
     cal,
@@ -548,11 +619,32 @@ st.plotly_chart(fig, use_container_width=True, height=350)
 conflicts = []
 for _, r in df_f.iterrows():
     p = r['Исполнитель']
-    s, e = pd.to_datetime(r['Дата начала']), pd.to_datetime(r['Дата окончания'])
-    leaves = df_leave[df_leave['Исполнитель']==p]
-    if any(not (e < ld or s > lu)
-           for ld, lu in zip(leaves['Начало'], leaves['Конец'])):
+
+    s = pd.to_datetime(r['Дата начала'], errors="coerce")
+    e = pd.to_datetime(r['Дата окончания'], errors="coerce")
+
+    # если интервал задачи битый — пропускаем
+    if pd.isna(s) or pd.isna(e):
+        continue
+
+    leaves = df_leave[df_leave['Исполнитель'] == p].copy()
+
+    leaves['НАЧАЛО'] = pd.to_datetime(leaves['НАЧАЛО'], errors="coerce")
+    leaves['КОНЕЦ']  = pd.to_datetime(leaves['КОНЕЦ'], errors="coerce")
+
+    if any(
+        not (e < ld or s > lu)
+        for ld, lu in zip(leaves['НАЧАЛО'], leaves['КОНЕЦ'])
+        if pd.notna(ld) and pd.notna(lu)
+    ):
         conflicts.append(r)
+# for _, r in df_f.iterrows():
+#     p = r['Исполнитель']
+#     s, e = pd.to_datetime(r['Дата начала']), pd.to_datetime(r['Дата окончания'])
+#     leaves = df_leave[df_leave['Исполнитель']==p]
+#     if any(not (e < ld or s > lu)
+#            for ld, lu in zip(leaves['НАЧАЛО'], leaves['КОНЕЦ'])):
+#         conflicts.append(r)
 
 df_conf = pd.DataFrame(conflicts)
 st.subheader("Задачи, пересекающиеся с отпусками")
