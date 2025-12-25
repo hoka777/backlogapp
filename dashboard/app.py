@@ -629,8 +629,8 @@ for _, r in df_f.iterrows():
 
     leaves = df_leave[df_leave['Исполнитель'] == p].copy()
 
-    leaves['НАЧАЛО'] = pd.to_datetime(leaves['НАЧАЛО'], errors="coerce")
-    leaves['КОНЕЦ']  = pd.to_datetime(leaves['КОНЕЦ'], errors="coerce")
+    leaves['НАЧАЛО'] = pd.to_datetime(leaves['НАЧАЛО'],format='%d.%m.%Y',dayfirst=True,  errors="coerce")
+    leaves['КОНЕЦ']  = pd.to_datetime(leaves['КОНЕЦ'],format='%d.%m.%Y',dayfirst=True,  errors="coerce")
 
     if any(
         not (e < ld or s > lu)
