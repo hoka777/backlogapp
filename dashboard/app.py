@@ -560,7 +560,7 @@ cal = pd.DataFrame(0, index=persons, columns=dates)
 # Нагрузка
 for _, r in df_f.iterrows():
     p = r['Исполнитель']
-    start, end = pd.to_datetime(r['Дата начала']), pd.to_datetime(r['Дата окончания'])
+    start, end = pd.to_datetime(r['Дата начала'],format='%d.%m.%Y',dayfirst=True,), pd.to_datetime(r['Дата окончания'],format='%d.%m.%Y',dayfirst=True,)
     for d in pd.date_range(start, end, freq='D'):
         if d.weekday()<5:
             cal.at[p, d] += 1
@@ -568,8 +568,8 @@ for _, r in df_f.iterrows():
 # Отпуска пометим -1
 for _, r in df_leave.iterrows():
     p = r['Исполнитель']
-    start = pd.to_datetime(r['НАЧАЛО'], errors="coerce")
-    end   = pd.to_datetime(r['КОНЕЦ'], errors="coerce")
+    start = pd.to_datetime(r['НАЧАЛО'],format='%d.%m.%Y',dayfirst=True, errors="coerce")
+    end   = pd.to_datetime(r['КОНЕЦ'],format='%d.%m.%Y',dayfirst=True, errors="coerce")
 
     # если нет начала или конца — пропускаем запись
     if pd.isna(start) or pd.isna(end):
