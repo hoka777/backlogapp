@@ -1,13 +1,12 @@
 html5lib==1.1
 htmldate==1.6.0
-plotly==5.17.0
+plotly
 seaborn==0.13.0
 stack-data==0.6.3
-streamlit==1.45.1
-streamlit-aggrid==1.1.5.post1
+streamlit
+streamlit-aggrid
 tornado==6.2
 urllib3==1.26.14
-watchdog==6.0.0
 openpyxl==3.1.0
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.2
