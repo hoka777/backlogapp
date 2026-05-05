@@ -294,11 +294,11 @@ if app_mode == "📊 План и Эпики":
         for _, row in sprint_totals.iterrows():
             fig_sprints.add_annotation(
                 x=row['Спринт_текст'], y=row['ТРЗ'],
-                text=f"<b>{row['ТРЗ']:.1f}</b>", showarrow=False, yshift=10,
+                text=f"<b>{row['ТРЗ']:.1f}</b>", showarrow=False, yshift=25,
                 font=dict(color=theme.get("text_color", "white") if theme else "white")
             )
 
-        st.plotly_chart(fig_sprints, use_container_width=True)
+        st.plotly_chart(fig_sprints, use_container_width=True,theme=None)
         st.caption(f"Средняя нагрузка: **{sprint_totals['ТРЗ'].mean():.1f}** чел/дн.")
 
     st.write("---")
@@ -559,8 +559,8 @@ elif app_mode == "👥 Ресурсы и Риски":
 
         fig_cal.update_yaxes(categoryorder="array", categoryarray=sorted_names, title="")
         fig_cal.update_xaxes(tickformat="%d.%m", range=[analysis_start, analysis_end])
-        fig_cal.update_layout(height=max(400, len(sorted_names) * 30), legend_title_text="Категория")
-        st.plotly_chart(fig_cal, use_container_width=True)
+        fig_cal.update_layout(barmode='overlay',height=max(400, len(sorted_names) * 30), legend_title_text="Категория")
+        st.plotly_chart(fig_cal, use_container_width=True,theme=None)
 
     # =========================================================
     # БЛОК 3.4: Риски (Пересечения отпусков и конфликты с задачами)
