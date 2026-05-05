@@ -507,7 +507,13 @@ elif app_mode == "👥 Ресурсы и Риски":
         sorted_names = list(reversed(unique_people))
 
         fig_cal = px.timeline(df_cal, x_start="Начало", x_end="Конец", y="Сотрудник", color="Группа_цвета", hover_name="Детали", color_discrete_map={'Праздник (Общий)': '#d62728', 'Праздник (Личный)': '#ff7f0e'}, template="plotly_white")
-        
+        fig_cal.update_traces(width=0.8) 
+
+        fig_cal.update_layout(
+            barmode='overlay', 
+            height=max(400, len(sorted_names) * 30), 
+            legend_title_text="Категория"
+        )
         # if not df_sprint.empty:
         #     for _, spr in df_sprint.iterrows():
         #         s_start, s_end, s_num = pd.to_datetime(spr['Дата начала'], dayfirst=True, errors='coerce').date(), pd.to_datetime(spr['Дата окончания'], dayfirst=True, errors='coerce').date(), spr.get('Номер спринта', '?')
@@ -559,7 +565,7 @@ elif app_mode == "👥 Ресурсы и Риски":
 
         fig_cal.update_yaxes(categoryorder="array", categoryarray=sorted_names, title="")
         fig_cal.update_xaxes(tickformat="%d.%m", range=[analysis_start, analysis_end])
-        fig_cal.update_layout(barmode='overlay',height=max(400, len(sorted_names) * 30), legend_title_text="Категория")
+        fig_cal.update_layout(barmode='relative',height=max(400, len(sorted_names) * 30), legend_title_text="Категория")
         st.plotly_chart(fig_cal, use_container_width=True,theme=None)
 
     # =========================================================
